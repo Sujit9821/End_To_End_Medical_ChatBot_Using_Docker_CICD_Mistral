@@ -8,11 +8,11 @@ torchvision==0.15.2a0
 torchaudio==2.5.1a0
 ctransformers==0.2.5
 scikit-learn==1.6.1
-scipy==1.13.1
-pandas==1.6.0            
+scipy==1.13.1          
 numpy==1.26.4
 requests==2.32.3
 python-dotenv==1.0.1    
 pydantic==2.10.6
 sentencepiece==0.2.0
 protobuf==5.29.4
+-e .
