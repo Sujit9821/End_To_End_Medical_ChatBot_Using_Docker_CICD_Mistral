@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medical Chatbot</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous">
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}"/>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+</head>
+<body>
+    <div class="container-fluid chat-container">
+        <div class="row justify-content-center align-items-center vh-100">
+            <div class="col-12 col-md-8 col-lg-6 chat-box">
+                <div class="card shadow-lg">
+                    <div class="card-header">
+                        <div class="d-flex align-items-center">
+                            <div class="img-cont">
+                                <img src="https://www.prdistribution.com/spirit/uploads/pressreleases/2019/newsreleases/d83341deb75c4c4f6b113f27b1e42cd8-chatbot-florence-already-helps-thousands-of-patients-to-remember-their-medication.png" class="user-img rounded-circle" alt="Bot Avatar">
+                                <span class="status-dot online"></span>
+                            </div>
+                            <div class="user-info ms-3">
+                                <h5 class="mb-0 text-white">Medical Chatbot</h5>
+                                <p class="text-light mb-0">Your Health Assistant</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="messageArea" class="card-body chat-body">
+                        <!-- Messages will be appended here -->
+                    </div>
+                    <div class="card-footer">
+                        <form id="messageForm" class="input-group">
+                            <input type="text" id="messageInput" name="msg" placeholder="Ask me anything..." autocomplete="off" class="form-control message-input" required/>
+                            <button type="submit" id="sendBtn" class="btn send-btn"><i class="fas fa-paper-plane"></i></button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+    <script>
+        $(document).ready(function() {
+            $("#messageForm").on("submit", function(event) {
+                event.preventDefault();
+                const date = new Date();
+                const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const rawText = $("#messageInput").val().trim();
+
+                if (!rawText) return; // Prevent empty messages
+
+                // User message
+                const userHtml = `
+                    <div class="message user-message animate__animated animate__fadeInUp">
+                        <div class="message-content">${rawText}</div>
+                        <span class="message-time">${time}</span>
+                    </div>`;
+                $("#messageArea").append(userHtml);
+                $("#messageInput").val("");
+
+                // Scroll to bottom
+                $("#messageArea").scrollTop($("#messageArea")[0].scrollHeight);
+
+                // Typing indicator
+                const typingHtml = `
+                    <div class="message bot-message typing animate__animated animate__fadeIn">
+                        <div class="message-content"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>
+                    </div>`;
+                $("#messageArea").append(typingHtml);
+                $("#messageArea").scrollTop($("#messageArea")[0].scrollHeight);
+
+                $.ajax({
+                    data: { msg: rawText },
+                    type: "POST",
+                    url: "/get",
+                    success: function(data) {
+                        $(".typing").remove(); // Remove typing indicator
+                        const botHtml = `
+                            <div class="message bot-message animate__animated animate__fadeInUp">
+                                <div class="message-content">${data}</div>
+                                <span class="message-time">${time}</span>
+                            </div>`;
+                        $("#messageArea").append(botHtml);
+                        $("#messageArea").scrollTop($("#messageArea")[0].scrollHeight);
+                    },
+                    error: function(xhr, status, error) {
+                        $(".typing").remove();
+                        const errorHtml = `
+                            <div class="message bot-message error animate__animated animate__fadeInUp">
+                                <div class="message-content">Sorry, something went wrong!</div>
+                                <span class="message-time">${time}</span>
+                            </div>`;
+                        $("#messageArea").append(errorHtml);
+                        $("#messageArea").scrollTop($("#messageArea")[0].scrollHeight);
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
