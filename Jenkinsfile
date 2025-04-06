@@ -28,7 +28,7 @@ pipeline {
                     sh '''
                     docker stop chatbot_app || true
                     docker rm chatbot_app || true
-                    docker run -d -p 5000:5000 --name chatbot_app ${IMAGE_NAME}:${TAG}
+                    docker run --env-file .env -d -p 5000:5000 --name chatbot_app ${IMAGE_NAME}:${TAG}
                     '''
                 }
             }
