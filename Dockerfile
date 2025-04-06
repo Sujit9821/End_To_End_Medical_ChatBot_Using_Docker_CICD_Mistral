@@ -10,6 +10,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application code
 COPY . .
+# Accept token as build argument
+ARG HF_TOKEN
+ENV HF_TOKEN=$HF_TOKEN
 
 # Expose the port the app runs on
 EXPOSE 5000

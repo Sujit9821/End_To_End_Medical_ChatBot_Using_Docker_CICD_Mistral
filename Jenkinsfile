@@ -4,6 +4,7 @@ pipeline {
     environment {
         IMAGE_NAME = 'chatbot_medical'
         TAG = 'v1'
+        HF_TOKEN = credentials('huggingface_token')
     }
 
     stages {
@@ -16,7 +17,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    sh 'docker build -t ${IMAGE_NAME}:${TAG} .'
+                    sh 'docker build --build-arg HF_TOKEN=$HF_TOKEN -t chatbot_medical:v1 .'
                 }
             }
         }
@@ -28,7 +29,7 @@ pipeline {
                     sh '''
                     docker stop chatbot_app || true
                     docker rm chatbot_app || true
-                    docker run --env-file .env -d -p 5000:8080 --name chatbot_app ${IMAGE_NAME}:${TAG}
+                    sh 'docker run -d --name chatbot_app -p 5000:8080 -e HF_TOKEN=$HF_TOKEN chatbot_medical:v1'
                     '''
                 }
             }
