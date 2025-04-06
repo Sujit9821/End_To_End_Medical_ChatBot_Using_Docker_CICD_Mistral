@@ -29,7 +29,7 @@ pipeline {
                     sh '''
                     docker stop chatbot_app || true
                     docker rm chatbot_app || true
-                    sh 'docker run -d --name chatbot_app -p 5000:8080 -e HF_TOKEN=$HF_TOKEN chatbot_medical:v1'
+                    'docker run -d --name chatbot_app -p 5000:8080 -e HF_TOKEN=$HF_TOKEN chatbot_medical:v1'
                     '''
                 }
             }
