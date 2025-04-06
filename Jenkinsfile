@@ -17,7 +17,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    sh 'docker build --build-arg HF_TOKEN=$HF_TOKEN -t chatbot_medical:v1 .'
+                    sh "docker build --build-arg HF_TOKEN=${HF_TOKEN} -t ${IMAGE_NAME}:${TAG} ."
                 }
             }
         }
@@ -25,12 +25,11 @@ pipeline {
         stage('Run Docker Container') {
             steps {
                 script {
-                    // Stop and remove previous container if exists
-                    sh '''
-                    docker stop chatbot_app || true
-                    docker rm chatbot_app || true
-                    'docker run -d --name chatbot_app -p 5000:8080 -e HF_TOKEN=$HF_TOKEN chatbot_medical:v1'
-                    '''
+                    sh """
+                        docker stop chatbot_app || true
+                        docker rm chatbot_app || true
+                        docker run -d --name chatbot_app -p 5000:8080 -e HF_TOKEN=${HF_TOKEN} ${IMAGE_NAME}:${TAG}
+                    """
                 }
             }
         }
