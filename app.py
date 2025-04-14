@@ -1,4 +1,7 @@
-from flask import Flask, render_template, jsonify, request
+from fastapi import FastAPI, Form, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 from src.utils import download_hugging_face_embeddings
 from langchain_pinecone import Pinecone
 from langchain_community.llms import CTransformers
@@ -12,37 +15,35 @@ import os
 # Load environment variables
 load_dotenv()
 
-# Hugging Face authentication (add your token to .env or hardcode it here temporarily)
-HF_TOKEN = os.getenv("HF_TOKEN")  # Ensure HF_TOKEN is set in your .env file
+# Authenticate with Hugging Face
+HF_TOKEN = os.getenv("HF_TOKEN")
 if not HF_TOKEN:
-    raise ValueError("HF_TOKEN not found in .env file. Please set it to your Hugging Face access token.")
-login(token=HF_TOKEN)  # Authenticate with Hugging Face
+    raise ValueError("HF_TOKEN not found in .env file.")
+login(token=HF_TOKEN)
 
 # Define model details
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.join(BASE_DIR, "models")
-MODEL_FILENAME = "mistral-7b-instruct-v0.2.Q5_K_M.gguf"  # Correct filename
+MODEL_FILENAME = "mistral-7b-instruct-v0.2.Q5_K_M.gguf"
 MODEL_PATH = os.path.join(MODEL_DIR, MODEL_FILENAME)
-
-# Ensure models directory exists
 os.makedirs(MODEL_DIR, exist_ok=True)
 
-# Download model if not present
+# Download model if needed
 if not os.path.exists(MODEL_PATH):
     print(f"Downloading model to {MODEL_PATH}...")
     MODEL_PATH = hf_hub_download(
-        repo_id="TheBloke/Mistral-7B-Instruct-v0.2-GGUF",  # Correct repo_id
+        repo_id="TheBloke/Mistral-7B-Instruct-v0.2-GGUF",
         filename=MODEL_FILENAME,
         local_dir=MODEL_DIR,
-        token=HF_TOKEN  # Pass the token explicitly
+        token=HF_TOKEN
     )
     print(f"Model downloaded to {MODEL_PATH}")
 
-# Initialize Pinecone
+# Init Pinecone
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 pc = pinecone.Pinecone(api_key=PINECONE_API_KEY)
-
 index_name = "medical-chatbot-index"
+
 if index_name not in pc.list_indexes().names():
     pc.create_index(
         name=index_name,
@@ -53,9 +54,8 @@ if index_name not in pc.list_indexes().names():
 
 index = pc.Index(index_name)
 
-# Initialize Embeddings
+# Embeddings
 embeddings = download_hugging_face_embeddings()
-
 docsearch = Pinecone.from_existing_index(
     index_name=index_name,
     embedding=embeddings,
@@ -63,7 +63,7 @@ docsearch = Pinecone.from_existing_index(
     namespace="medical-doc"
 )
 
-# Define Prompt Template (refined for concise answers)
+# Prompt
 prompt_template = """
 Given the following context: {context}
 Answer the question directly and concisely: {question}
@@ -72,7 +72,7 @@ Provide only the requested information, no additional questions or content.
 PROMPT = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
 chain_type_kwargs = {"prompt": PROMPT}
 
-# Initialize LLM (Mistral-7B-Instruct)
+# LLM
 llm = CTransformers(
     model=MODEL_PATH,
     model_type="mistral",
@@ -83,7 +83,7 @@ llm = CTransformers(
     }
 )
 
-# Create Retrieval Chain
+# QA Chain
 qa = RetrievalQA.from_chain_type(
     llm=llm,
     chain_type="stuff",
@@ -92,21 +92,20 @@ qa = RetrievalQA.from_chain_type(
     chain_type_kwargs=chain_type_kwargs
 )
 
-# Initialize Flask App
-app = Flask(__name__)
+# FastAPI App
+app = FastAPI()
 
-@app.route("/")
-def index():
-    return render_template('chat.html')
+# Templates & Static
+templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
-@app.route("/get", methods=["GET", "POST"])
-def chat():
-    msg = request.form["msg"]
-    input = msg
-    print(input)
-    result = qa.invoke({"query": input})
+@app.get("/", response_class=HTMLResponse)
+async def read_root(request: Request):
+    return templates.TemplateResponse("chat.html", {"request": request})
+
+@app.post("/get")
+async def get_answer(msg: str = Form(...)):
+    print("User input:", msg)
+    result = qa.invoke({"query": msg})
     print("Response:", result["result"])
-    return str(result["result"])
-
-if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=8080, debug=True,use_reloader=False)
+    return {"response": result["result"]}
