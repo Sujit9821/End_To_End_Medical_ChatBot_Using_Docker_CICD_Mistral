@@ -1,10 +1,10 @@
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from src.utils import download_hugging_face_embeddings
 from langchain_pinecone import Pinecone
-from langchain_community.llms import CTransformers
+from langchain_community.llms import CTransformers  
 from langchain.prompts import PromptTemplate
 from langchain.chains import RetrievalQA
 from dotenv import load_dotenv
@@ -98,6 +98,11 @@ app = FastAPI()
 # Templates & Static
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Debug route to test static file serving
+@app.get("/test-bg")
+async def test_background():
+    return FileResponse("/home/sujit/Practice/End_To_End_Medical_ChatBot_Using_Docker_CICD_Mistral/static/background.jpg")
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
