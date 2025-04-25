@@ -4,7 +4,7 @@ pipeline {
     environment {
         IMAGE_NAME = 'chatbot_medical'
         TAG = 'v1'
-        HF_TOKEN = credentials('HF_TOKEN')  // Fetch HuggingFace Token from Jenkins credentials
+        HF_TOKEN = credentials('huggingface_token')  // Fetch HuggingFace Token from Jenkins credentials
         PINECONE_API_KEY = credentials('pinecone_api_key')  // Fetch Pinecone API key from Jenkins credentials
         PINECONE_API_ENV = credentials('pinecone_api_env') 
     }
