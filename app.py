@@ -2,6 +2,7 @@ from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from src.utils import download_hugging_face_embeddings
 from langchain_pinecone import Pinecone
 from langchain_community.llms import CTransformers  
@@ -94,6 +95,15 @@ qa = RetrievalQA.from_chain_type(
 
 # FastAPI App
 app = FastAPI()
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers
+)
 
 # Templates & Static
 templates = Jinja2Templates(directory="templates")
