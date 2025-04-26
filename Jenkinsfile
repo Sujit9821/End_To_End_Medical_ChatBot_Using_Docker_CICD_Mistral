@@ -5,8 +5,8 @@ pipeline {
         IMAGE_NAME = 'medical_chatbot'
         TAG = 'v1'
         CONTAINER_NAME = 'medical_chatbot_container'
-        INTERNAL_PORT = '8000'   // FastAPI default port
-        EXTERNAL_PORT = '8000'   // Exposed port on host machine
+        INTERNAL_PORT = '8000'
+        EXTERNAL_PORT = '8000'
         HF_TOKEN = credentials('HF_TOKEN')  
         PINECONE_API_KEY = credentials('PINECONE_API_KEY')  
         PINECONE_API_ENV = credentials('PINECONE_API_ENV') 
@@ -16,7 +16,7 @@ pipeline {
 
         stage('Checkout Code') {
             steps {
-                echo "🔄 Code will be automatically cloned via GitHub webhook or Jenkins SCM settings."
+                echo "🔄 Cloning code from GitHub..."
             }
         }
 
@@ -27,7 +27,6 @@ pipeline {
                     sh """
                     docker build \\
                         --build-arg HF_TOKEN=${HF_TOKEN} \\
-                        --build-arg PINECONE_API_KEY=${PINECONE_API_KEY} \\
                         -t ${IMAGE_NAME}:${TAG} .
                     """
                 }
@@ -36,7 +35,7 @@ pipeline {
 
         stage('Stop & Remove Old Container') {
             steps {
-                echo "🧹 Cleaning up old container if it exists."
+                echo "🧹 Stopping old container if it exists."
                 script {
                     sh """
                     docker stop ${CONTAINER_NAME} || true
@@ -48,7 +47,7 @@ pipeline {
 
         stage('Free Port if Occupied') {
             steps {
-                echo "🛠️ Checking if port ${EXTERNAL_PORT} is already in use."
+                echo "🛠️ Checking port ${EXTERNAL_PORT}"
                 script {
                     sh """
                     if lsof -i :${EXTERNAL_PORT}; then
@@ -64,7 +63,7 @@ pipeline {
 
         stage('Run Docker Container') {
             steps {
-                echo "🚀 Running new Docker container on port ${EXTERNAL_PORT}"
+                echo "🚀 Running container on port ${EXTERNAL_PORT}"
                 script {
                     sh """
                     docker run -d \\
@@ -81,10 +80,9 @@ pipeline {
 
         stage('Health Check') {
             steps {
-                echo "🔍 Checking if FastAPI app is up and running"
+                echo "🔍 Checking if FastAPI app is ready..."
                 script {
-                    sleep 10  // Give a few seconds for app to start
-
+                    sleep 10
                     sh """
                     if curl -f http://localhost:${EXTERNAL_PORT}/docs; then
                         echo '✅ FastAPI app is running!'
@@ -99,14 +97,14 @@ pipeline {
 
     post {
         always {
-            echo "📋 Fetching container logs before cleanup..."
+            echo "📋 Fetching Docker logs before cleaning."
             script {
                 sh """
-                docker logs ${CONTAINER_NAME} || echo '⚠️ Could not fetch logs (container might have already exited)'
+                docker logs ${CONTAINER_NAME} || echo '⚠️ Could not fetch logs'
                 """
             }
 
-            echo "🎯 Stopping and cleaning up the Docker container."
+            echo "🎯 Cleaning up container."
             script {
                 sh """
                 docker stop ${CONTAINER_NAME} || true
@@ -116,11 +114,11 @@ pipeline {
         }
 
         success {
-            echo "✅ Build, container run, and health check succeeded!"
+            echo "✅ Full CI/CD succeeded!"
         }
 
         failure {
-            echo "❌ Build failed. Check above logs carefully."
+            echo "❌ CI/CD failed. Please check errors."
         }
     }
 }
