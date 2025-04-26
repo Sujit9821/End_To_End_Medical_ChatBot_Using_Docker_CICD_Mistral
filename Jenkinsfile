@@ -6,7 +6,7 @@ pipeline {
         TAG = 'v1'
         CONTAINER_NAME = 'medical_chatbot_container'
         INTERNAL_PORT = '8000'   // FastAPI default port
-        EXTERNAL_PORT = '5000'   // Exposed port on host machine
+        EXTERNAL_PORT = '8000'   // Exposed port on host machine
         HF_TOKEN = credentials('HF_TOKEN')  
         PINECONE_API_KEY = credentials('PINECONE_API_KEY')  
         PINECONE_API_ENV = credentials('PINECONE_API_ENV') 

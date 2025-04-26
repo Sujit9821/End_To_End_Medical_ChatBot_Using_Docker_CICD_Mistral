@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from huggingface_hub import hf_hub_download, login
 import pinecone
 import os
+import uvicorn
 
 # Load environment variables
 load_dotenv()
@@ -124,3 +125,6 @@ async def get_answer(msg: str = Form(...)):
     result = qa.invoke({"query": msg})
     print("Response:", result["result"])
     return {"response": result["result"]}
+
+if __name__ == "__main__":
+    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False)
