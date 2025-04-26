@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = 'chatbot_medical'
+        IMAGE_NAME = 'medical_chatbot'
         TAG = 'v1'
         HF_TOKEN = credentials('HF_TOKEN')  // Fetch HuggingFace Token from Jenkins credentials
         PINECONE_API_KEY = credentials('PINECONE_API_KEY')  // Fetch Pinecone API key from Jenkins credentials
@@ -30,9 +30,9 @@ pipeline {
                 script {
                     // Stop and remove existing container if it exists, then run a new container with necessary environment variables
                     sh """
-                        docker stop chatbot_app || true
-                        docker rm chatbot_app || true
-                        docker run -d --name chatbot_app -p 5000:8080 -e HF_TOKEN=${HF_TOKEN} -e PINECONE_API_KEY=${PINECONE_API_KEY} ${IMAGE_NAME}:${TAG}
+                        docker stop medical_chatbot:v_1.0.0 || true
+                        docker rm medical_chatbot:v_1.0.0 || true
+                        docker run -d --name medical_chatbot:v_1.0.0 -p 5000:8080 -e HF_TOKEN=${HF_TOKEN} -e PINECONE_API_KEY=${PINECONE_API_KEY} ${IMAGE_NAME}:${TAG}
                     """
                 }
             }
