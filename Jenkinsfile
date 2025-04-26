@@ -3,31 +3,41 @@ pipeline {
 
     environment {
         IMAGE_NAME = 'medical_chatbot'
-        TAG = 'v1'
+        BASE_TAG = 'v1'
         CONTAINER_NAME = 'medical_chatbot_container'
         INTERNAL_PORT = '8000'
         EXTERNAL_PORT = '8000'
-        HF_TOKEN = credentials('HF_TOKEN')  
-        PINECONE_API_KEY = credentials('PINECONE_API_KEY')  
-        PINECONE_API_ENV = credentials('PINECONE_API_ENV') 
+        HF_TOKEN = credentials('HF_TOKEN')
+        PINECONE_API_KEY = credentials('PINECONE_API_KEY')
+        PINECONE_API_ENV = credentials('PINECONE_API_ENV')
     }
 
     stages {
-
         stage('Checkout Code') {
             steps {
-                echo "🔄 Cloning code from GitHub..."
+                echo "🔄 Cloning repository..."
+            }
+        }
+
+        stage('Generate Dynamic Tag') {
+            steps {
+                script {
+                    def date = new Date().format("yyyyMMdd-HHmm")
+                    env.DYNAMIC_TAG = "${BASE_TAG}-${date}"
+                    echo "🆕 Dynamic Tag Generated: ${DYNAMIC_TAG}"
+                }
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                echo "🐳 Building Docker image: ${IMAGE_NAME}:${TAG}"
+                echo "🐳 Building Docker image: ${IMAGE_NAME}:${DYNAMIC_TAG}"
                 script {
                     sh """
                     docker build \\
                         --build-arg HF_TOKEN=${HF_TOKEN} \\
-                        -t ${IMAGE_NAME}:${TAG} .
+                        --build-arg PINECONE_API_KEY=${PINECONE_API_KEY} \\
+                        -t ${IMAGE_NAME}:${DYNAMIC_TAG} .
                     """
                 }
             }
@@ -35,7 +45,7 @@ pipeline {
 
         stage('Stop & Remove Old Container') {
             steps {
-                echo "🧹 Stopping old container if it exists."
+                echo "🧹 Cleaning up old container if exists."
                 script {
                     sh """
                     docker stop ${CONTAINER_NAME} || true
@@ -47,11 +57,11 @@ pipeline {
 
         stage('Free Port if Occupied') {
             steps {
-                echo "🛠️ Checking port ${EXTERNAL_PORT}"
+                echo "🛠️ Checking if port ${EXTERNAL_PORT} is free..."
                 script {
                     sh """
                     if lsof -i :${EXTERNAL_PORT}; then
-                        echo "⚡ Port ${EXTERNAL_PORT} is occupied. Killing process..."
+                        echo "⚡ Port ${EXTERNAL_PORT} is occupied. Killing..."
                         fuser -k ${EXTERNAL_PORT}/tcp || true
                     else
                         echo "✅ Port ${EXTERNAL_PORT} is free."
@@ -63,7 +73,7 @@ pipeline {
 
         stage('Run Docker Container') {
             steps {
-                echo "🚀 Running container on port ${EXTERNAL_PORT}"
+                echo "🚀 Running Docker container from image: ${IMAGE_NAME}:${DYNAMIC_TAG}"
                 script {
                     sh """
                     docker run -d \\
@@ -72,7 +82,7 @@ pipeline {
                         -e HF_TOKEN=${HF_TOKEN} \\
                         -e PINECONE_API_KEY=${PINECONE_API_KEY} \\
                         -e PINECONE_API_ENV=${PINECONE_API_ENV} \\
-                        ${IMAGE_NAME}:${TAG}
+                        ${IMAGE_NAME}:${DYNAMIC_TAG}
                     """
                 }
             }
@@ -80,14 +90,14 @@ pipeline {
 
         stage('Health Check') {
             steps {
-                echo "🔍 Checking if FastAPI app is ready..."
+                echo "🔍 Checking if FastAPI app is live"
                 script {
                     sleep 10
                     sh """
                     if curl -f http://localhost:${EXTERNAL_PORT}/docs; then
-                        echo '✅ FastAPI app is running!'
+                        echo '✅ FastAPI app running!'
                     else
-                        echo '⚠️ FastAPI app might not be ready yet.'
+                        echo '⚠️ App might not be ready yet.'
                     fi
                     """
                 }
@@ -97,14 +107,12 @@ pipeline {
 
     post {
         always {
-            echo "📋 Fetching Docker logs before cleaning."
+            echo "📋 Fetching Docker container logs before cleanup."
             script {
-                sh """
-                docker logs ${CONTAINER_NAME} || echo '⚠️ Could not fetch logs'
-                """
+                sh "docker logs ${CONTAINER_NAME} || echo '⚠️ Could not fetch logs (container may have exited)'"
             }
 
-            echo "🎯 Cleaning up container."
+            echo "🎯 Stopping and cleaning container."
             script {
                 sh """
                 docker stop ${CONTAINER_NAME} || true
@@ -114,11 +122,11 @@ pipeline {
         }
 
         success {
-            echo "✅ Full CI/CD succeeded!"
+            echo "✅ Build, container run, and health check succeeded!"
         }
 
         failure {
-            echo "❌ CI/CD failed. Please check errors."
+            echo "❌ Build failed. Check logs carefully."
         }
     }
 }
