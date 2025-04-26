@@ -44,7 +44,7 @@ pipeline {
 
     stage('Cleanup Old Container') {
       steps {
-        echo "🧹 Removing old container..."
+        echo "🧹 Removing old container if exists..."
         sh """
           docker stop ${CONTAINER_NAME} || true
           docker rm   ${CONTAINER_NAME} || true
@@ -78,12 +78,33 @@ pipeline {
       }
     }
 
-    stage('Health Check') {
+    stage('Wait for Health Check (with timer)') {
       steps {
-        echo "🔍 Waiting for FastAPI to respond on /health"
-        retry(5) {
-          sleep time: 5, unit: 'SECONDS'
-          sh "curl -f http://localhost:${EXTERNAL_PORT}/health"
+        script {
+          echo "⏳ Starting health check loop..."
+          def startTime = sh(script: "date +%s", returnStdout: true).trim()
+          def maxRetries = 800
+          def sleepSeconds = 5
+          def success = false
+
+          for (int i = 0; i < maxRetries; i++) {
+            try {
+              sh "curl -f http://localhost:${EXTERNAL_PORT}/health"
+              success = true
+              break
+            } catch (Exception e) {
+              echo "🔄 Health check attempt ${i+1} failed, retrying in ${sleepSeconds} seconds..."
+              sleep time: sleepSeconds, unit: 'SECONDS'
+            }
+          }
+
+          if (!success) {
+            error "❌ Health check failed after ${maxRetries} retries."
+          } else {
+            def endTime = sh(script: "date +%s", returnStdout: true).trim()
+            def totalTime = (endTime.toInteger() - startTime.toInteger()) / 60.0
+            echo "✅ App became healthy after ${totalTime} minutes."
+          }
         }
       }
     }
@@ -104,7 +125,12 @@ pipeline {
       """
     }
 
-    success { echo "✅ All stages completed successfully!" }
-    failure { echo "❌ Pipeline failed; check above logs." }
+    success {
+      echo "✅ All Jenkins stages completed successfully!"
+    }
+
+    failure {
+      echo "❌ Jenkins pipeline failed; please check above logs."
+    }
   }
 }
