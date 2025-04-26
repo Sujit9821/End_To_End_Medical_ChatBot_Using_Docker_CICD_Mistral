@@ -84,7 +84,14 @@ pipeline {
                 echo "🔍 Checking if FastAPI app is up and running"
                 script {
                     sleep 10  // Give a few seconds for app to start
-                    sh "curl -f http://localhost:${EXTERNAL_PORT}/docs || echo '⚠️ FastAPI app might not be ready yet.'"
+
+                    sh """
+                    if curl -f http://localhost:${EXTERNAL_PORT}/docs; then
+                        echo '✅ FastAPI app is running!'
+                    else
+                        echo '⚠️ FastAPI app might not be ready yet.'
+                    fi
+                    """
                 }
             }
         }
@@ -92,7 +99,14 @@ pipeline {
 
     post {
         always {
-            echo "🎯 Post Actions: Stopping and cleaning up the Docker container."
+            echo "📋 Fetching container logs before cleanup..."
+            script {
+                sh """
+                docker logs ${CONTAINER_NAME} || echo '⚠️ Could not fetch logs (container might have already exited)'
+                """
+            }
+
+            echo "🎯 Stopping and cleaning up the Docker container."
             script {
                 sh """
                 docker stop ${CONTAINER_NAME} || true
