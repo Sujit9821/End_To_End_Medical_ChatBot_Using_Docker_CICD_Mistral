@@ -46,6 +46,22 @@ pipeline {
             }
         }
 
+        stage('Free Port if Occupied') {
+            steps {
+                echo "🛠️ Checking if port ${EXTERNAL_PORT} is already in use."
+                script {
+                    sh """
+                    if lsof -i :${EXTERNAL_PORT}; then
+                        echo "⚡ Port ${EXTERNAL_PORT} is occupied. Killing process..."
+                        fuser -k ${EXTERNAL_PORT}/tcp || true
+                    else
+                        echo "✅ Port ${EXTERNAL_PORT} is free."
+                    fi
+                    """
+                }
+            }
+        }
+
         stage('Run Docker Container') {
             steps {
                 echo "🚀 Running new Docker container on port ${EXTERNAL_PORT}"
