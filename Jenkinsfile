@@ -83,7 +83,7 @@ pipeline {
             steps {
                 echo "🔍 Checking if FastAPI app is up and running"
                 script {
-                    sleep 5  // Give a few seconds for app to start
+                    sleep 300  // Give a few seconds for app to start
                     sh "curl -f http://localhost:${EXTERNAL_PORT}/docs || echo '⚠️ FastAPI app might not be ready yet.'"
                 }
             }
