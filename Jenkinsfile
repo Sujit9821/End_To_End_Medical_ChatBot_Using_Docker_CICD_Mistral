@@ -93,6 +93,10 @@ pipeline {
     always {
       echo "📋 Container logs:"
       sh "docker logs ${CONTAINER_NAME} || true"
+
+      echo "📂 Checking model folder inside container:"
+      sh "docker exec ${CONTAINER_NAME} ls -lh /app/models || true"
+
       echo "🎯 Stopping & removing container..."
       sh """
         docker stop ${CONTAINER_NAME} || true

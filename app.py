@@ -3,16 +3,16 @@ from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
 import os
 import uvicorn
 
-# Load env vars
+# Load environment variables
+from dotenv import load_dotenv
 load_dotenv()
 
 app = FastAPI()
 
-# CORS
+# CORS setup
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,11 +21,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Static and templates
+# Static files and templates
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Global variable for QA model
+# Constants for model path
+BASE_DIR = os.path.dirname(__file__)
+MODEL_DIR = os.path.join(BASE_DIR, "models")
+MODEL_FILENAME = "mistral-7b-instruct-v0.2.Q5_K_M.gguf"
+MODEL_PATH = os.path.join(MODEL_DIR, MODEL_FILENAME)
+
+# Global qa model
 qa = None
 
 @app.get("/health")
@@ -44,17 +50,13 @@ async def test_background():
 async def get_answer(msg: str = Form(...)):
     global qa
     if qa is None:
-        return JSONResponse({"error": "Model is loading, please try again later."}, status_code=503)
+        return JSONResponse({"error": "Model is not loaded yet."}, status_code=503)
     result = qa.invoke({"query": msg})
     return {"response": result["result"]}
 
 @app.on_event("startup")
 async def startup_event():
-    """
-    Heavy initialization happens here.
-    """
     global qa
-    from huggingface_hub import hf_hub_download, login
     from src.utils import download_hugging_face_embeddings
     from src.prompt import prompt_template
     from langchain_pinecone import Pinecone
@@ -63,28 +65,14 @@ async def startup_event():
     from langchain.chains import RetrievalQA
     import pinecone
 
-    # Hugging Face login
-    HF_TOKEN = os.getenv("HF_TOKEN")
-    if not HF_TOKEN:
-        raise ValueError("HF_TOKEN not found.")
-    login(token=HF_TOKEN)
-
-    # Download model if missing
-    BASE_DIR = os.path.dirname(__file__)
-    MODEL_DIR = os.path.join(BASE_DIR, "models")
-    MODEL_FILENAME = "mistral-7b-instruct-v0.2.Q5_K_M.gguf"
-    MODEL_PATH = os.path.join(MODEL_DIR, MODEL_FILENAME)
-    os.makedirs(MODEL_DIR, exist_ok=True)
-
+    # 🚫 Make sure model exists
     if not os.path.exists(MODEL_PATH):
-        hf_hub_download(
-            repo_id="TheBloke/Mistral-7B-Instruct-v0.2-GGUF",
-            filename=MODEL_FILENAME,
-            local_dir=MODEL_DIR,
-            token=HF_TOKEN
-        )
+        print(f"❌ Model not found at {MODEL_PATH}")
+        raise FileNotFoundError(f"Model file not found at {MODEL_PATH}. Cannot proceed without model.")
 
-    # Setup Pinecone
+    print(f"✅ Model found at {MODEL_PATH}")
+
+    # Pinecone setup
     PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
     PINECONE_API_ENV = os.getenv("PINECONE_API_ENV")
     pc = pinecone.Pinecone(api_key=PINECONE_API_KEY, environment=PINECONE_API_ENV)
@@ -94,7 +82,6 @@ async def startup_event():
         pc.create_index(name=index_name, dimension=384, metric="cosine")
     index = pc.Index(index_name)
 
-    # Setup embeddings and QA chain
     embeddings = download_hugging_face_embeddings()
     docsearch = Pinecone.from_existing_index(
         index_name=index_name,
@@ -119,4 +106,4 @@ async def startup_event():
     )
 
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("app:app", host="0.0.0.0", port=8000)
