@@ -1,46 +1,53 @@
-# Use official Python slim image
+# Use BuildKit for optional secret mounting if you enable it (see docs)
+# syntax=docker/dockerfile:1.4
+
 FROM python:3.10-slim
 
-# Set environment variables
+# Prevent Python from writing .pyc files and buffer flushing
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system deps
 RUN apt-get update && apt-get install -y \
     build-essential \
     gcc \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/*
 
-# Copy only requirements first
+# Python deps
 COPY requirements.txt .
+RUN pip install --upgrade pip \
+ && pip install --no-cache-dir -r requirements.txt
 
-# Install Python dependencies
-RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
-
-# Copy the whole project (src, templates, static, etc.)
+# Copy app code
 COPY . .
 
-# Accept build-time Hugging Face token
+# Accept HF_TOKEN at build time
 ARG HF_TOKEN
 ENV HF_TOKEN=$HF_TOKEN
 
-# Download model during Docker build itself
+# Download model at build time
 RUN mkdir -p models && \
-    python3 -c "\
-import os; \
-from huggingface_hub import login, hf_hub_download; \
-token = os.getenv('HF_TOKEN'); \
-login(token=token); \
-hf_hub_download(repo_id='TheBloke/Mistral-7B-Instruct-v0.2-GGUF', \
-                filename='mistral-7b-instruct-v0.2.Q5_K_M.gguf', \
-                local_dir='./models', token=token);"
+    python3 - <<EOF
+import os
+from huggingface_hub import login, hf_hub_download
 
-# Expose FastAPI default port
+token = os.getenv("HF_TOKEN")
+login(token=token)
+hf_hub_download(
+  repo_id="TheBloke/Mistral-7B-Instruct-v0.2-GGUF",
+  filename="mistral-7b-instruct-v0.2.Q5_K_M.gguf",
+  local_dir="./models",
+  token=token
+)
+EOF
+
+# Expose port and add container‐level healthcheck
 EXPOSE 8000
+HEALTHCHECK --interval=10s --timeout=5s --start-period=20s \
+  CMD curl -f http://localhost:8000/health || exit 1
 
-# Command to run the app
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start the FastAPI app
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
