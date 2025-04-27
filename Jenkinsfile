@@ -74,7 +74,7 @@ pipeline {
         echo "🚀 Deploying to EC2..."
         sshagent(['EC2_SSH_KEY']) {
           sh """
-            ssh -o StrictHostKeyChecking=no ubuntu@13.51.174.211 << 'EOF'
+            ssh -o StrictHostKeyChecking=no ubuntu@16.170.141.73 << 'EOF'
               echo "🔄 Pulling new image..."
               docker pull ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${IMAGE_NAME}:${DYNAMIC_TAG}
 
