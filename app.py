@@ -25,13 +25,11 @@ app.add_middleware(
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Constants for model path
 BASE_DIR = os.path.dirname(__file__)
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 MODEL_FILENAME = "mistral-7b-instruct-v0.2.Q5_K_M.gguf"
 MODEL_PATH = os.path.join(MODEL_DIR, MODEL_FILENAME)
 
-# Global qa model
 qa = None
 
 @app.get("/health")
@@ -50,7 +48,7 @@ async def test_background():
 async def get_answer(msg: str = Form(...)):
     global qa
     if qa is None:
-        return JSONResponse({"error": "Model is not loaded yet."}, status_code=503)
+        return JSONResponse({"error": "Model not loaded."}, status_code=503)
     result = qa.invoke({"query": msg})
     return {"response": result["result"]}
 
@@ -65,16 +63,12 @@ async def startup_event():
     from langchain.chains import RetrievalQA
     import pinecone
 
-    # 🚫 Make sure model exists
     if not os.path.exists(MODEL_PATH):
-        print(f"❌ Model not found at {MODEL_PATH}")
-        raise FileNotFoundError(f"Model file not found at {MODEL_PATH}. Cannot proceed without model.")
+        raise FileNotFoundError(f"❌ Model file not found at {MODEL_PATH}")
 
-    print(f"✅ Model found at {MODEL_PATH}")
-
-    # Pinecone setup
     PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
     PINECONE_API_ENV = os.getenv("PINECONE_API_ENV")
+
     pc = pinecone.Pinecone(api_key=PINECONE_API_KEY, environment=PINECONE_API_ENV)
     index_name = "medical-chatbot-index"
 
@@ -91,6 +85,7 @@ async def startup_event():
     )
 
     PROMPT = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
+
     llm = CTransformers(
         model=MODEL_PATH,
         model_type="mistral",

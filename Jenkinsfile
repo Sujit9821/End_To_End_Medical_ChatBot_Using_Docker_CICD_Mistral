@@ -2,135 +2,89 @@ pipeline {
   agent any
 
   environment {
-    IMAGE_NAME      = 'medical_chatbot'
-    BASE_TAG        = 'v1'
-    CONTAINER_NAME  = 'medical_chatbot_container'
-    INTERNAL_PORT   = '8000'
-    EXTERNAL_PORT   = '8000'
-    HF_TOKEN        = credentials('HF_TOKEN')
-    PINECONE_API_KEY= credentials('PINECONE_API_KEY')
-    PINECONE_API_ENV= credentials('PINECONE_API_ENV')
+    BASE_IMAGE_NAME  = 'medbot-prod-app'
+    BASE_TAG         = 'prod'
+    INTERNAL_PORT    = '8000'
+    EXTERNAL_PORT    = '8000'
+    HF_TOKEN         = credentials('HF_TOKEN')
+    PINECONE_API_KEY = credentials('PINECONE_API_KEY')
+    PINECONE_API_ENV = credentials('PINECONE_API_ENV')
+    AWS_ACCOUNT_ID   = credentials('AWS_ACCOUNT_ID')
+    AWS_REGION       = 'eu-north-1'
   }
 
   stages {
-    stage('Checkout Code') {
+    stage('Checkout') {
       steps {
-        echo "🔄 Cloning repository..."
         checkout scm
       }
     }
 
-    stage('Generate Dynamic Tag') {
+    stage('Generate Dynamic Names') {
       steps {
         script {
-          def date = new Date().format("yyyyMMdd-HHmm")
-          env.DYNAMIC_TAG = "${BASE_TAG}-${date}"
-          echo "🆕 Dynamic Tag: ${DYNAMIC_TAG}"
+          def randomStr = UUID.randomUUID().toString().substring(0, 6)
+          env.RANDOM_SUFFIX = randomStr
+          env.DYNAMIC_TAG = "${BASE_TAG}-${new Date().format('yyyyMMdd-HHmm')}"
+          env.CONTAINER_NAME = "app_${randomStr}"
+          env.IMAGE_NAME = BASE_IMAGE_NAME
         }
       }
     }
 
     stage('Build Docker Image') {
       steps {
-        echo "🐳 Building Docker image..."
         sh """
-          docker build \
+          DOCKER_BUILDKIT=1 docker build \
             --build-arg HF_TOKEN=${HF_TOKEN} \
-            --build-arg PINECONE_API_KEY=${PINECONE_API_KEY} \
             -t ${IMAGE_NAME}:${DYNAMIC_TAG} .
         """
       }
     }
 
-    stage('Cleanup Old Container') {
+    stage('Push to AWS ECR') {
       steps {
-        echo "🧹 Removing old container if exists..."
         sh """
-          docker stop ${CONTAINER_NAME} || true
-          docker rm   ${CONTAINER_NAME} || true
+          aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+          docker tag ${IMAGE_NAME}:${DYNAMIC_TAG} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${IMAGE_NAME}:${DYNAMIC_TAG}
+          docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${IMAGE_NAME}:${DYNAMIC_TAG}
         """
       }
     }
 
-    stage('Free Port if Occupied') {
+    stage('Deploy on AWS EC2') {
       steps {
-        echo "🛠️ Freeing port ${EXTERNAL_PORT} if needed..."
-        sh """
-          if lsof -i :${EXTERNAL_PORT}; then
-            fuser -k ${EXTERNAL_PORT}/tcp || true
-          fi
-        """
-      }
-    }
+        sshagent(['EC2_SSH_KEY']) {
+          sh """
+            ssh -o StrictHostKeyChecking=no ubuntu@13.51.174.211 << 'EOF'
+              docker pull ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${IMAGE_NAME}:${DYNAMIC_TAG}
+              docker run -d --name ${CONTAINER_NAME}_new -p ${EXTERNAL_PORT}:${INTERNAL_PORT} \
+                -e HF_TOKEN=${HF_TOKEN} \
+                -e PINECONE_API_KEY=${PINECONE_API_KEY} \
+                -e PINECONE_API_ENV=${PINECONE_API_ENV} \
+                ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${IMAGE_NAME}:${DYNAMIC_TAG}
 
-    stage('Run Docker Container') {
-      steps {
-        echo "🚀 Launching container..."
-        sh """
-          docker run -d \
-            --name ${CONTAINER_NAME} \
-            -p ${EXTERNAL_PORT}:${INTERNAL_PORT} \
-            -e HF_TOKEN=${HF_TOKEN} \
-            -e PINECONE_API_KEY=${PINECONE_API_KEY} \
-            -e PINECONE_API_ENV=${PINECONE_API_ENV} \
-            ${IMAGE_NAME}:${DYNAMIC_TAG}
-        """
-      }
-    }
+              echo "Waiting for container to be healthy..."
+              start_time=\$(date +%s)
 
-    stage('Wait for Health Check (with timer)') {
-      steps {
-        script {
-          echo "⏳ Starting health check loop..."
-          def startTime = sh(script: "date +%s", returnStdout: true).trim()
-          def maxRetries = 800
-          def sleepSeconds = 5
-          def success = false
+              while true; do
+                if curl -s http://localhost:${EXTERNAL_PORT}/health | grep "ok"; then
+                  break
+                fi
+                sleep 5
+              done
 
-          for (int i = 0; i < maxRetries; i++) {
-            try {
-              sh "curl -f http://localhost:${EXTERNAL_PORT}/health"
-              success = true
-              break
-            } catch (Exception e) {
-              echo "🔄 Health check attempt ${i+1} failed, retrying in ${sleepSeconds} seconds..."
-              sleep time: sleepSeconds, unit: 'SECONDS'
-            }
-          }
+              end_time=\$(date +%s)
+              total_time=\$(( (end_time - start_time) / 60 ))
+              echo "✅ Healthcheck passed after \$total_time minutes."
 
-          if (!success) {
-            error "❌ Health check failed after ${maxRetries} retries."
-          } else {
-            def endTime = sh(script: "date +%s", returnStdout: true).trim()
-            def totalTime = (endTime.toInteger() - startTime.toInteger()) / 60.0
-            echo "✅ App became healthy after ${totalTime} minutes."
-          }
+              docker stop \$(docker ps -q --filter "name=app_") || true
+              docker rm \$(docker ps -a -q --filter "name=app_") || true
+              docker rename ${CONTAINER_NAME}_new ${CONTAINER_NAME}
+            EOF
+          """
         }
       }
-    }
-  }
-
-  post {
-    always {
-      echo "📋 Container logs:"
-      sh "docker logs ${CONTAINER_NAME} || true"
-
-      echo "📂 Checking model folder inside container:"
-      sh "docker exec ${CONTAINER_NAME} ls -lh /app/models || true"
-
-      echo "🎯 Stopping & removing container..."
-      sh """
-        docker stop ${CONTAINER_NAME} || true
-        docker rm   ${CONTAINER_NAME} || true
-      """
-    }
-
-    success {
-      echo "✅ All Jenkins stages completed successfully!"
-    }
-
-    failure {
-      echo "❌ Jenkins pipeline failed; please check above logs."
     }
   }
 }

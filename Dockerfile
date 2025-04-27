@@ -1,44 +1,48 @@
 # syntax=docker/dockerfile:1.4
 
-# Base Python image
-FROM python:3.10-slim
+##########################
+# Stage 1: Model Download
+##########################
+FROM python:3.10-slim as downloader
 
-# Environment settings
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+WORKDIR /download
 
-# Set working directory
-WORKDIR /app
+RUN apt-get update && apt-get install -y build-essential gcc curl && rm -rf /var/lib/apt/lists/*
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    gcc \
-    curl \
- && rm -rf /var/lib/apt/lists/*
+RUN pip install --upgrade pip && pip install huggingface_hub[hf_xet]
 
-# Install Python dependencies
-COPY requirements.txt .
-RUN pip install --upgrade pip \
- && pip install --no-cache-dir -r requirements.txt \
- && pip install "huggingface_hub[hf_xet]"
-
-# Copy application source code
-COPY . .
-
-# Accept Hugging Face token as build argument
+# Accept Hugging Face token
 ARG HF_TOKEN
 ENV HF_TOKEN=${HF_TOKEN}
 
-# Download model during build
-RUN python src/download_model.py
+COPY src/download_model.py .
 
-# Expose the app port
+RUN python download_model.py
+
+##########################
+# Stage 2: Final Image
+##########################
+FROM python:3.10-slim
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y build-essential gcc curl && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt && pip install huggingface_hub[hf_xet]
+
+# Copy App code
+COPY . .
+
+# Copy Model from Stage 1
+COPY --from=downloader /download/models ./models
+
 EXPOSE 8000
 
-# Container healthcheck
 HEALTHCHECK --interval=10s --timeout=5s --start-period=20s \
   CMD curl -f http://localhost:8000/health || exit 1
 
-# Start FastAPI app
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
