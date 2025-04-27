@@ -29,8 +29,8 @@ pipeline {
           env.DYNAMIC_TAG = "${BASE_TAG}-${new Date().format('yyyyMMdd-HHmm')}"
           env.CONTAINER_NAME = "app_${randomStr}"
           env.IMAGE_NAME = BASE_IMAGE_NAME
-          echo "🆕 Generated Container Name: ${env.CONTAINER_NAME}"
-          echo "🆕 Generated Image Tag: ${env.DYNAMIC_TAG}"
+          echo "🆕 Container Name: ${env.CONTAINER_NAME}"
+          echo "🆕 Image Tag: ${env.DYNAMIC_TAG}"
         }
       }
     }
@@ -39,8 +39,12 @@ pipeline {
       steps {
         withCredentials([string(credentialsId: 'HF_TOKEN', variable: 'HF_TOKEN')]) {
           sh """
-            echo "🐳 Starting Docker build without BuildKit..."
-            docker build \
+            echo "🔍 Checking environment..."
+            export DOCKER_CLI_PLUGIN_PATH=/home/ubuntu/.docker/cli-plugins
+            echo "User: \$(whoami) | Groups: \$(groups) | Docker Version: \$(docker --version) | Buildx Version: \$(docker buildx version)" && docker info
+
+            echo "🐳 Building using Buildx..."
+            docker buildx build --load \
               --build-arg HF_TOKEN=\$HF_TOKEN \
               -t ${IMAGE_NAME}:${DYNAMIC_TAG} .
           """
@@ -65,13 +69,13 @@ pipeline {
       }
     }
 
-    stage('Deploy to AWS EC2 Instance') {
+    stage('Deploy to AWS EC2') {
       steps {
         echo "🚀 Deploying to EC2..."
         sshagent(['EC2_SSH_KEY']) {
           sh """
             ssh -o StrictHostKeyChecking=no ubuntu@13.51.174.211 << 'EOF'
-              echo "🔄 Pulling new docker image..."
+              echo "🔄 Pulling new image..."
               docker pull ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${IMAGE_NAME}:${DYNAMIC_TAG}
 
               echo "🐳 Running new container..."
@@ -81,16 +85,14 @@ pipeline {
                 -e PINECONE_API_ENV=${PINECONE_API_ENV} \
                 ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${IMAGE_NAME}:${DYNAMIC_TAG}
 
-              echo "🔍 Waiting for Health Check..."
+              echo "🔍 Health check starting..."
               start_time=\$(date +%s)
-
               while true; do
                 if curl -s http://localhost:${EXTERNAL_PORT}/health | grep "ok"; then
                   break
                 fi
                 sleep 5
               done
-
               end_time=\$(date +%s)
               total_time=\$(( (end_time - start_time) / 60 ))
               echo "✅ Healthcheck passed after \$total_time minutes."
@@ -101,8 +103,6 @@ pipeline {
 
               echo "🔁 Renaming new container..."
               docker rename ${CONTAINER_NAME}_new ${CONTAINER_NAME}
-
-              echo "🎯 Deployment finished successfully."
             EOF
           """
         }
@@ -112,7 +112,7 @@ pipeline {
 
   post {
     always {
-      echo "📋 Showing container logs after build:"
+      echo "📋 Checking containers after deployment:"
       sshagent(['EC2_SSH_KEY']) {
         sh """
           ssh -o StrictHostKeyChecking=no ubuntu@13.51.174.211 "docker ps -a || true; docker logs \$(docker ps -alq) || true"
@@ -120,10 +120,10 @@ pipeline {
       }
     }
     success {
-      echo "✅✅✅ Build, Push and Deploy completed successfully!"
+      echo "✅ Pipeline completed successfully!"
     }
     failure {
-      echo "❌❌❌ Build failed! Check above logs."
+      echo "❌ Pipeline failed. Please check logs."
     }
   }
 }
