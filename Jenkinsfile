@@ -29,8 +29,8 @@ pipeline {
           env.DYNAMIC_TAG = "${BASE_TAG}-${new Date().format('yyyyMMdd-HHmm')}"
           env.CONTAINER_NAME = "app_${randomStr}"
           env.IMAGE_NAME = BASE_IMAGE_NAME
-          echo "🆕 Container Name: ${env.CONTAINER_NAME}"
-          echo "🆕 Image Tag: ${env.DYNAMIC_TAG}"
+          echo "🆕 Generated Container Name: ${env.CONTAINER_NAME}"
+          echo "🆕 Generated Image Tag: ${env.DYNAMIC_TAG}"
         }
       }
     }
@@ -39,12 +39,8 @@ pipeline {
       steps {
         withCredentials([string(credentialsId: 'HF_TOKEN', variable: 'HF_TOKEN')]) {
           sh """
-            export PATH=\$PATH:/home/ubuntu/.docker/cli-plugins
-            echo "🛠️ Checking Buildx version..."
-            docker buildx version || true
-
-            echo "🐳 Starting Docker build..."
-            DOCKER_BUILDKIT=1 docker build \
+            echo "🐳 Starting Docker build without BuildKit..."
+            docker build \
               --build-arg HF_TOKEN=\$HF_TOKEN \
               -t ${IMAGE_NAME}:${DYNAMIC_TAG} .
           """
@@ -71,21 +67,21 @@ pipeline {
 
     stage('Deploy to AWS EC2 Instance') {
       steps {
-        echo "🚀 Starting SSH Deployment to EC2..."
+        echo "🚀 Deploying to EC2..."
         sshagent(['EC2_SSH_KEY']) {
           sh """
             ssh -o StrictHostKeyChecking=no ubuntu@13.51.174.211 << 'EOF'
-              echo "🔄 Pulling New Docker Image from ECR..."
+              echo "🔄 Pulling new docker image..."
               docker pull ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${IMAGE_NAME}:${DYNAMIC_TAG}
 
-              echo "🐳 Running New Container..."
+              echo "🐳 Running new container..."
               docker run -d --name ${CONTAINER_NAME}_new -p ${EXTERNAL_PORT}:${INTERNAL_PORT} \
                 -e HF_TOKEN=${HF_TOKEN} \
                 -e PINECONE_API_KEY=${PINECONE_API_KEY} \
                 -e PINECONE_API_ENV=${PINECONE_API_ENV} \
                 ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${IMAGE_NAME}:${DYNAMIC_TAG}
 
-              echo "🔍 Waiting for Health Check to pass..."
+              echo "🔍 Waiting for Health Check..."
               start_time=\$(date +%s)
 
               while true; do
@@ -103,7 +99,7 @@ pipeline {
               docker stop \$(docker ps -q --filter "name=app_") || true
               docker rm \$(docker ps -a -q --filter "name=app_") || true
 
-              echo "🔁 Switching new container to official name..."
+              echo "🔁 Renaming new container..."
               docker rename ${CONTAINER_NAME}_new ${CONTAINER_NAME}
 
               echo "🎯 Deployment finished successfully."
@@ -116,7 +112,7 @@ pipeline {
 
   post {
     always {
-      echo "📋 Always showing container logs if anything wrong:"
+      echo "📋 Showing container logs after build:"
       sshagent(['EC2_SSH_KEY']) {
         sh """
           ssh -o StrictHostKeyChecking=no ubuntu@13.51.174.211 "docker ps -a || true; docker logs \$(docker ps -alq) || true"
@@ -124,10 +120,10 @@ pipeline {
       }
     }
     success {
-      echo "✅✅✅ Build and deployment SUCCESS!"
+      echo "✅✅✅ Build, Push and Deploy completed successfully!"
     }
     failure {
-      echo "❌❌❌ Build failed! Check above logs carefully."
+      echo "❌❌❌ Build failed! Check above logs."
     }
   }
 }
