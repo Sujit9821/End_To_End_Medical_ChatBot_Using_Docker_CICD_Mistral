@@ -31,7 +31,7 @@ ARG HF_TOKEN
 ENV HF_TOKEN=${HF_TOKEN}
 
 # Download model during build
-RUN python scripts/download_model.py
+RUN python src/download_model.py
 
 # Expose the app port
 EXPOSE 8000
