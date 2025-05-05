@@ -95,7 +95,7 @@ It is designed to deliver accurate, context-aware responses in medical query han
 
 🧑‍💻  **Author**
 
-   Sujit Kumar Sangramsingh
+   [Sujit Kumar Sangramsingh](https://www.linkedin.com/in/roy98210/)
 
 📜  **License**
 
