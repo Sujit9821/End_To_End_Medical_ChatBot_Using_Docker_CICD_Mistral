@@ -1,15 +1,36 @@
-# 🩺 End-to-End Medical Chatbot Using Mistral LLM, Docker, and CI/CD
+# 🩺 End-to-End HealthSync Chatbot Using Mistral LLM, Docker, and CI/CD
+
+---
+
+## 📸 UI Screenshots
+
+Below are the key UI components of the HealthSync Chatbot app:
+
+![SS 1](media/1.png)
+
+![SS 2](media/2.png)
+
+![SS 3](media/3.png)
+
+![SS 4](media/4.png)
+
+![SS 5](media/5.png)
+
+![SS 6](media/6.png)
+
+![SS 7](media/7.png)
+
 
 ## Project Overview
 
-This project demonstrates a full-stack deployment of a **Medical Chatbot** powered by **Mistral's Large Language Model (LLM)**. It integrates **FastAPI** for backend API services, **LangChain** for LLM orchestration, **Pinecone** for efficient vector-based retrieval, and follows best practices for containerization and automation using **Docker** and **Jenkins CI/CD**.  
+This project demonstrates a full-stack deployment of a **MHealthSync Chatbot** powered by **Mistral's Large Language Model (LLM)**. It integrates **FastAPI** for backend API services, **LangChain** for LLM orchestration, **Pinecone** for efficient vector-based retrieval, and follows best practices for containerization and automation using **Docker** and **Jenkins CI/CD**.  
 It is designed to deliver accurate, context-aware responses in medical query handling, and is optimized for scalable production deployment.
 
 ---
 
 ## ✨ Features
 
-- Medical chatbot powered by **Mistral 7B** model
+- HealthSync chatbot powered by **Mistral 7B** model
 - **FastAPI** backend for lightweight, high-performance API
 - **Vector Search** integration using **Pinecone**
 - **LangChain** framework for LLM management and retrieval augmentation
